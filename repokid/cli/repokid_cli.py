@@ -46,7 +46,7 @@ import time
 
 import botocore
 from cloudaux import CloudAux
-from cloudaux.aws.iam import list_roles, get_role_inline_policies
+from cloudaux.aws.iam import list_roles, get_account_authorization_details, get_role_inline_policies
 from cloudaux.aws.sts import sts_conn
 from docopt import docopt
 import import_string
@@ -367,13 +367,16 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
     conn = config['connection_iam']
     conn['account_number'] = account_number
 
-    roles = Roles([Role(role_data) for role_data in list_roles(**conn)])
+    role_data = get_account_authorization_details(filter='Role')
+    role_data_by_id = {item['RoleId']: item for item in role_data}
+
+    roles = Roles([Role(role_data) for role_data in role_data])
 
     active_roles = []
     LOGGER.info('Updating role data for account {}'.format(account_number))
     for role in tqdm(roles):
         role.account = account_number
-        current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
+        current_policies = role_data_by_id[role.role_id]['RolePolicyList']
         active_roles.append(role.role_id)
         roledata.update_role_data(dynamo_table, account_number, role, current_policies)
 
